@@ -10,6 +10,8 @@ var output_uniform_set: RID
 
 var buffers: Array[RID]
 
+const DIM := 80
+const LOCAL_SIZE := 8
 const WAITING_TIME_SECONDS := 1.0
 
 var time_waited := WAITING_TIME_SECONDS + 1.0
@@ -28,14 +30,13 @@ func _process(delta: float) -> void:
         var sync_time = Time.get_ticks_msec()
         rd.sync()
         if ran_compute == "sync":
-            var result = rd.buffer_get_data(buffers[0])
-            print("received: ", result.size(), " bytes synchronously in ", Time.get_ticks_msec() - start_ref_time, "ms")
+            extract_done(rd.buffer_get_data(buffers[0]))
         ran_compute = null
         print("buffer_get_data blocked for: ", Time.get_ticks_msec() - sync_time, "ms")
 
 
 func extract_done(result: PackedByteArray):
-    print("received: ", result.size(), " bytes asynchronously in ", Time.get_ticks_msec() - start_ref_time, "ms")
+    print("received: ", result.size(), " bytes in ", Time.get_ticks_msec() - start_ref_time, "ms")
 
 
 func init_compute_pipeline(shader_file: RDShaderFile) -> void:
@@ -46,16 +47,10 @@ func init_compute_pipeline(shader_file: RDShaderFile) -> void:
     pipeline = rd.compute_pipeline_create(shader)
 
 
-func get_input_bytes(dims: Vector3i) -> Array[PackedByteArray]:
+func get_bytes(dims: Vector3i) -> Array[PackedByteArray]:
     var result = PackedInt32Array([])
-    result.resize(dims.x * dims.y * dims.z)
-    result.fill(0)
-    return [result.to_byte_array()]
-
-
-func get_output_bytes(dims: Vector3i) -> Array[PackedByteArray]:
-    var result = PackedInt32Array([])
-    result.resize(dims.x * dims.y * dims.z)
+    var true_dims = LOCAL_SIZE * dims
+    result.resize(true_dims.x * true_dims.y * true_dims.z)
     result.fill(0)
     return [result.to_byte_array()]
 
@@ -105,7 +100,7 @@ func run_pipeline(dims: Vector3i) -> void:
 
 
 func sync_setup(dims: Vector3i):
-    create_uniform_sets(get_input_bytes(dims), get_output_bytes(dims))
+    create_uniform_sets(get_bytes(dims), get_bytes(dims))
     
     RenderingServer.call_on_render_thread(
         func():
@@ -122,18 +117,19 @@ func _on_sync_button_pressed() -> void:
 
     start_ref_time = Time.get_ticks_msec()
 
-    var dims = 500 * Vector3i.ONE
+    var dims = DIM * Vector3i.ONE
     WorkerThreadPool.add_task(sync_setup.bind(dims))
 
     print("Thread start blocked for: ", Time.get_ticks_msec() - start_ref_time, "ms")
 
 
 func async_setup(dims: Vector3i):
-    create_uniform_sets(get_input_bytes(dims), get_output_bytes(dims))
+    create_uniform_sets(get_bytes(dims), get_bytes(dims))
 
     RenderingServer.call_on_render_thread(
         func():
             var start_time = Time.get_ticks_msec()
+            # Inverting the following two lines makes the game crash in the editor (at least on my hardware)
             rd.buffer_get_data_async(buffers[0], extract_done)
             run_pipeline(dims)
             ran_compute = "async"
@@ -147,7 +143,7 @@ func _on_async_button_pressed() -> void:
 
     start_ref_time = Time.get_ticks_msec()
     
-    var dims = 500 * Vector3i.ONE
+    var dims = DIM * Vector3i.ONE
     WorkerThreadPool.add_task(async_setup.bind(dims))
 
     print("Thread start blocked for: ", Time.get_ticks_msec() - start_ref_time, "ms")
