@@ -4,7 +4,6 @@ var rd: RenderingDevice
 var shader: RID
 var pipeline: RID
 
-var push_constant: PackedByteArray
 var input_uniform_set: RID
 var output_uniform_set: RID
 
@@ -18,7 +17,6 @@ var time_waited := WAITING_TIME_SECONDS + 1.0
 var ran_compute = null
 var start_ref_time: int
 
-@export var synchronize := true
 
 func _ready() -> void:
     init_compute_pipeline(load("res://test.glsl"))
@@ -37,6 +35,7 @@ func _process(delta: float) -> void:
 
 func extract_done(result: PackedByteArray):
     print("received: ", result.size(), " bytes in ", Time.get_ticks_msec() - start_ref_time, "ms")
+    clean()
 
 
 func init_compute_pipeline(shader_file: RDShaderFile) -> void:
@@ -92,7 +91,6 @@ func run_pipeline(dims: Vector3i) -> void:
     rd.compute_list_bind_compute_pipeline(compute_list, pipeline)
     rd.compute_list_bind_uniform_set(compute_list, input_uniform_set, 0)
     rd.compute_list_bind_uniform_set(compute_list, output_uniform_set, 1)
-    rd.compute_list_set_push_constant(compute_list, push_constant, push_constant.size())
     rd.compute_list_dispatch(compute_list, dims.x, dims.y, dims.z)
     rd.compute_list_end()
 
