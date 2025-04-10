@@ -26,6 +26,9 @@ func _process(delta: float) -> void:
     time_waited += delta
     if ran_compute and time_waited >= WAITING_TIME_SECONDS:
         var sync_time = Time.get_ticks_msec()
+        if ran_compute == "async":
+            # If running after sync the callback is never called
+            rd.buffer_get_data_async(buffers[0], extract_done)
         rd.sync()
         if ran_compute == "sync":
             extract_done(rd.buffer_get_data(buffers[0]))
@@ -123,8 +126,6 @@ func async_setup(dims: Vector3i):
 
     RenderingServer.call_on_render_thread(
         func():
-            # Inverting the following two lines makes the game crash in the editor (at least on my hardware)
-            rd.buffer_get_data_async(buffers[0], extract_done)
             run_pipeline(dims)
             ran_compute = "async"
             time_waited = 0.0
