@@ -39,9 +39,4 @@ theme_override_constants/separation = 10
 layout_mode = 2
 text = "Run shader sync"
 
-[node name="Button2" type="Button" parent="VBoxContainer"]
-layout_mode = 2
-text = "Run shader async"
-
-[connection signal="pressed" from="VBoxContainer/Button" to="." method="_on_sync_button_pressed"]
-[connection signal="pressed" from="VBoxContainer/Button2" to="." method="_on_async_button_pressed"]
+[connection signal="pressed" from="VBoxContainer/Button" to="." method="_on_button_pressed"]

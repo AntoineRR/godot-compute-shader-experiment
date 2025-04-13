@@ -9,37 +9,8 @@ var output_uniform_set: RID
 
 var buffers: Array[RID]
 
-const DIM := 1
+const DIM := 50
 const LOCAL_SIZE := 8
-const WAITING_TIME_SECONDS := 1.0
-
-var time_waited := WAITING_TIME_SECONDS + 1.0
-var ran_compute = null
-var start_ref_time: int
-
-
-func _ready() -> void:
-    init_compute_pipeline(load("res://test.glsl"))
-
-
-func _process(delta: float) -> void:
-    time_waited += delta
-    if ran_compute and time_waited >= WAITING_TIME_SECONDS:
-        var sync_time = Time.get_ticks_msec()
-        if ran_compute == "async":
-            # If running after sync the callback is never called
-            rd.buffer_get_data_async(buffers[0], extract_done)
-        rd.sync()
-        if ran_compute == "sync":
-            extract_done(rd.buffer_get_data(buffers[0]))
-        ran_compute = null
-        print("buffer_get_data blocked for: ", Time.get_ticks_msec() - sync_time, "ms")
-
-
-func extract_done(result: PackedByteArray):
-    print("received: ", result.size(), " bytes in ", Time.get_ticks_msec() - start_ref_time, "ms")
-    print("array elements should be their index: ", result.to_int32_array())
-    clean()
 
 
 func init_compute_pipeline(shader_file: RDShaderFile) -> void:
@@ -101,41 +72,18 @@ func run_pipeline(dims: Vector3i) -> void:
     rd.submit()
 
 
-func sync_setup(dims: Vector3i):
+func run_shader(dims: Vector3i):
+    init_compute_pipeline(load("res://test.glsl"))
     create_uniform_sets(get_bytes(dims), get_bytes(dims))
     
-    RenderingServer.call_on_render_thread(
-        func():
-            run_pipeline(dims)
-            ran_compute = "sync"
-            time_waited = 0.0
-    )
+    run_pipeline(dims)
+    rd.sync()
+    var result = rd.buffer_get_data(buffers[0])
+    print("received: ", result.size(), " bytes")
+    print("array elements should be their index: ", result.to_int32_array()[-1])
+    clean()
 
 
-func _on_sync_button_pressed() -> void:
-    print("=== SYNC ===")
-
-    start_ref_time = Time.get_ticks_msec()
-
+func _on_button_pressed() -> void:
     var dims = DIM * Vector3i.ONE
-    WorkerThreadPool.add_task(sync_setup.bind(dims))
-
-
-func async_setup(dims: Vector3i):
-    create_uniform_sets(get_bytes(dims), get_bytes(dims))
-
-    RenderingServer.call_on_render_thread(
-        func():
-            run_pipeline(dims)
-            ran_compute = "async"
-            time_waited = 0.0
-    )
-
-
-func _on_async_button_pressed() -> void:
-    print("=== ASYNC ===")
-
-    start_ref_time = Time.get_ticks_msec()
-    
-    var dims = DIM * Vector3i.ONE
-    WorkerThreadPool.add_task(async_setup.bind(dims))
+    WorkerThreadPool.add_task(run_shader.bind(dims))
